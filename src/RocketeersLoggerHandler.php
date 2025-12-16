@@ -34,6 +34,8 @@ class RocketeersLoggerHandler extends AbstractProcessingHandler
             return;
         }
 
+        $user = app('auth')?->user();
+
         $this->client->report([
             'channel' => $record['channel'], // not saved currently
             'environment' => app()->environment(),
@@ -57,7 +59,9 @@ class RocketeersLoggerHandler extends AbstractProcessingHandler
             'files' => $this->getFiles(),
             'inputs' => $this->request->all() ?: null,
             'sessions' => $this->getSession(),
-            'user_name' => $this->request->user() ? $this->request->user()->getAuthIdentifierName() : null,
+            'user_id' => $user?->getKey(),
+            'user_email' => $user?->email,
+            'user_name' => $user?->name,
             'user_agent' => $this->request->headers->get('User-Agent'),
             'ip_address' => $this->request->getClientIp(),
             'hostname' => $this->getHostname(),
