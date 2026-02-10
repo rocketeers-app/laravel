@@ -17,10 +17,10 @@
         "php": "^7.0|^8.0",
         "illuminate/support": "^5.8|^6.0|^7.0|^8.0|^9.0|^10.0|^11.0|^12.0",
         "monolog/monolog": "^3.0",
-        "rocketeers-app/rocketeers-api-client": "dev-master"
+        "rocketeers-app/rocketeers-api-client": "^1.0"
     },
     "require-dev": {
-        "phpunit/phpunit": "^9.0"
+        "phpunit/phpunit": "^10.0|^11.0"
     },
     "autoload": {
         "psr-4": {

@@ -40,17 +40,39 @@ Make sure that in the logging configuration the default log channel is `stack`:
 'default' => env('LOG_CHANNEL', 'stack'),
 ```
 
-Add the Rocketeers config file to your Laravel app:
+Publish the configuration file:
+
+```bash
+php artisan vendor:publish --provider="Rocketeers\Laravel\RocketeersLoggerServiceProvider" --tag="config"
+```
+
+This will create a `config/rocketeers.php` file with the following defaults:
 
 ```php
 <?php
 
 return [
-    'rocketeers.api_token' => env('ROCKETEERS_API_TOKEN'),
+    'api_token' => env('ROCKETEERS_API_TOKEN'),
+
+    'environments' => [
+        'production',
+    ],
+
+    'sensitive_fields' => [
+        'password',
+        'password_confirmation',
+        'token',
+        'secret',
+        'credit_card',
+        'card_number',
+        'cvv',
+        'ssn',
+        'authorization',
+    ],
 ];
 ```
 
-And at last, add the `ROCKETEERS_API_TOKEN` in your `.env` file.
+Add the `ROCKETEERS_API_TOKEN` to your `.env` file.
 
 ### Changelog
 

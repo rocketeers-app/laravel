@@ -7,19 +7,19 @@ use Illuminate\Http\UploadedFile;
 use Monolog\Handler\AbstractProcessingHandler;
 use Monolog\Logger;
 use Monolog\LogRecord;
+use Rocketeers\Laravel\Concerns\ExtractsExceptionCode;
 use Rocketeers\Rocketeers;
 use Symfony\Component\HttpFoundation\Exception\SessionNotFoundException;
 
 class RocketeersLoggerHandler extends AbstractProcessingHandler
 {
-    protected $client;
+    use ExtractsExceptionCode;
 
-    protected $request;
+    protected $client;
 
     public function __construct(Rocketeers $client, $level = Logger::DEBUG, $bubble = true)
     {
         $this->client = $client;
-        $this->request = Request::createFromGlobals();
 
         parent::__construct($level, $bubble);
     }
@@ -34,39 +34,44 @@ class RocketeersLoggerHandler extends AbstractProcessingHandler
             return;
         }
 
+        $request = app('request');
         $user = app('auth')?->user();
 
-        $this->client->report([
-            'channel' => $record['channel'], // not saved currently
-            'environment' => app()->environment(),
-            'code' => $this->getCodeFromException($record),
-            'exception' => $this->getException($record),
-            'message' => $this->getMessage($record),
-            'context' => $record['context'], // not saved currently
-            'datetime' => $record['datetime'], // not saved currently
-            'extra' => $record['extra'] ?: null, // not saved currently
-            'level' => $record['level'], // not saved currently
-            'level_name' => $record['level_name'], // not saved currently
-            'file' => $this->getFile($record),
-            'line' => $this->getLine($record),
-            'trace' => $this->getTrace($record),
-            'method' => app()->runningInConsole() ? null : $this->request->getMethod(),
-            'url' => app()->runningInConsole() ? config('app.url') : $this->request->getUri(),
-            'querystring' => $this->request->query->all() ?: null,
-            'referrer' => $this->request->server('HTTP_REFERER'),
-            'headers' => $this->request->headers->all(),
-            'cookies' => $this->request->cookies->all(),
-            'files' => $this->getFiles(),
-            'inputs' => $this->request->all() ?: null,
-            'sessions' => $this->getSession(),
-            'user_id' => $user?->getKey(),
-            'user_email' => $user?->email,
-            'user_name' => $user?->name,
-            'user_agent' => $this->request->headers->get('User-Agent'),
-            'ip_address' => $this->request->getClientIp(),
-            'hostname' => $this->getHostname(),
-            'command' => trim(implode(' ', $this->request->server('argv', null) ?: [])),
-        ]);
+        try {
+            $this->client->report([
+                'channel' => $record['channel'],
+                'environment' => app()->environment(),
+                'code' => $this->getCodeFromException($record['context']['exception'] ?? null),
+                'exception' => $this->getException($record),
+                'message' => $this->getMessage($record),
+                'context' => $record['context'],
+                'datetime' => $record['datetime'],
+                'extra' => $record['extra'] ?: null,
+                'level' => $record['level'],
+                'level_name' => $record['level_name'],
+                'file' => $this->getFile($record),
+                'line' => $this->getLine($record),
+                'trace' => $this->getTrace($record),
+                'method' => app()->runningInConsole() ? null : $request->getMethod(),
+                'url' => app()->runningInConsole() ? config('app.url') : $request->getUri(),
+                'querystring' => $request->query->all() ?: null,
+                'referrer' => $request->server('HTTP_REFERER'),
+                'headers' => $this->filterSensitiveData($request->headers->all()),
+                'cookies' => $this->filterSensitiveData($request->cookies->all()),
+                'files' => $this->getFiles($request),
+                'inputs' => $this->filterSensitiveData($request->all()) ?: null,
+                'sessions' => $this->filterSensitiveData($this->getSession($request)),
+                'user_id' => $user?->getKey(),
+                'user_email' => $user?->email,
+                'user_name' => $user?->name,
+                'user_agent' => $request->headers->get('User-Agent'),
+                'ip_address' => $request->getClientIp(),
+                'hostname' => $this->getHostname($request),
+                'command' => trim(implode(' ', $request->server('argv', null) ?: [])),
+            ]);
+        } catch (\Throwable $e) {
+            // Silently fail to prevent infinite error loops
+        }
     }
 
     public function getException(LogRecord $record): ?string
@@ -78,11 +83,11 @@ class RocketeersLoggerHandler extends AbstractProcessingHandler
         }
 
         if (is_object($exception)) {
-            if (method_exists($record['context']['exception'], 'getOriginalClassName')) {
-                return $record['context']['exception']->getOriginalClassName();
-            } else {
-                return get_class($record['context']['exception']);
+            if (method_exists($exception, 'getOriginalClassName')) {
+                return $exception->getOriginalClassName();
             }
+
+            return get_class($exception);
         }
 
         return null;
@@ -132,51 +137,34 @@ class RocketeersLoggerHandler extends AbstractProcessingHandler
         return $exception?->getTrace();
     }
 
-    public function getHostname()
+    public function getHostname(Request $request): ?string
     {
-        if (! $this->request->getClientIp() || $this->request->getClientIp() == '127.0.0.1') {
-            return shell_exec('hostname');
+        if (! $request->getClientIp() || $request->getClientIp() == '127.0.0.1') {
+            return gethostname() ?: null;
         }
 
-        return gethostbyaddr($this->request->getClientIp());
+        return gethostbyaddr($request->getClientIp());
     }
 
-    public function getSession()
+    public function getSession(Request $request): ?array
     {
         try {
-            $session = $this->request->getSession() ? $this->request->session()->all() : null;
+            return $request->getSession() ? $request->session()->all() : null;
         } catch (SessionNotFoundException $exception) {
-            $session = null;
+            return null;
         }
-
-        return $session;
     }
 
-    protected function getCodeFromException(LogRecord $record): ?int
+    protected function getFiles(Request $request): array
     {
-        $exception = $record['context']['exception'] ?? null;
-
-        if (is_object($exception) && method_exists($exception, 'getStatusCode')) {
-            return (int) $exception->getStatusCode();
-        }
-
-        if (is_object($exception) && method_exists($exception, 'getCode')) {
-            return (int) $exception->getCode();
-        }
-
-        return null;
-    }
-
-    protected function getFiles(): array
-    {
-        if (is_null($this->request->files)) {
+        if (is_null($request->files)) {
             return [];
         }
 
-        return $this->mapFiles($this->request->files->all());
+        return $this->mapFiles($request->files->all());
     }
 
-    protected function mapFiles(array $files)
+    protected function mapFiles(array $files): array
     {
         return array_map(function ($file) {
             if (is_array($file)) {
@@ -205,5 +193,27 @@ class RocketeersLoggerHandler extends AbstractProcessingHandler
                 'mimeType' => $mimeType,
             ];
         }, $files);
+    }
+
+    protected function filterSensitiveData(?array $data): ?array
+    {
+        if ($data === null) {
+            return null;
+        }
+
+        $sensitiveFields = config('rocketeers.sensitive_fields', [
+            'password', 'password_confirmation', 'token', 'secret',
+            'credit_card', 'card_number', 'cvv', 'ssn', 'authorization',
+        ]);
+
+        foreach ($data as $key => $value) {
+            if (in_array(strtolower($key), $sensitiveFields)) {
+                $data[$key] = '********';
+            } elseif (is_array($value)) {
+                $data[$key] = $this->filterSensitiveData($value);
+            }
+        }
+
+        return $data;
     }
 }

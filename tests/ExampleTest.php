@@ -3,12 +3,12 @@
 namespace Rocketeers\Laravel\Tests;
 
 use Orchestra\Testbench\TestCase;
-use Rocketeers\Laravel\RocketeersServiceProvider;
+use Rocketeers\Laravel\RocketeersLoggerServiceProvider;
 
 class ExampleTest extends TestCase
 {
     protected function getPackageProviders($app)
     {
-        return [RocketeersServiceProvider::class];
+        return [RocketeersLoggerServiceProvider::class];
     }
 }
