@@ -8,6 +8,7 @@ use Illuminate\Log\LogManager;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
 use Monolog\Logger;
+use Rocketeers\Rocketeers;
 
 class RocketeersLoggerServiceProvider extends ServiceProvider
 {
@@ -31,6 +32,10 @@ class RocketeersLoggerServiceProvider extends ServiceProvider
         $this->mergeConfigFrom($source, 'rocketeers');
 
         $this->app->register(RocketeersEventServiceProvider::class);
+
+        $this->app->singleton('rocketeers.client', function () {
+            return new Rocketeers(config('rocketeers.api_token'));
+        });
 
         $this->app->singleton('rocketeers.logger', function ($app) {
             $handler = new RocketeersLoggerHandler($app->make('rocketeers.client'));
