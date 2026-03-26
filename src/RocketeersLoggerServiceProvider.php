@@ -33,11 +33,11 @@ class RocketeersLoggerServiceProvider extends ServiceProvider
 
         $this->app->register(RocketeersEventServiceProvider::class);
 
-        $this->app->bind(\Rocketeers\Rocketeers::class, 'rocketeers.client')
-
         $this->app->singleton('rocketeers.client', function () {
             return new Rocketeers(config('rocketeers.api_token'));
         });
+
+        $this->app->bind(Rocketeers::class, 'rocketeers.client');
 
         $this->app->singleton('rocketeers.logger', function ($app) {
             $handler = new RocketeersLoggerHandler($app->make('rocketeers.client'));
