@@ -16,7 +16,7 @@
     "require": {
         "php": "^7.0|^8.0",
         "illuminate/support": ">=5.8.0 <=13.0.0",
-        "monolog/monolog": "^3.0",
+        "monolog/monolog": "^2.0 || ^3.0",
         "rocketeers-app/rocketeers-api-client": "^1.0"
     },
     "require-dev": {
