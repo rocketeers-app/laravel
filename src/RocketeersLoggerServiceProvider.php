@@ -8,6 +8,7 @@ use Illuminate\Log\LogManager;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
 use Monolog\Logger;
+use Rocketeers\Laravel\Console\Commands\TestRocketeersCommand;
 use Rocketeers\Rocketeers;
 
 class RocketeersLoggerServiceProvider extends ServiceProvider
@@ -20,6 +21,12 @@ class RocketeersLoggerServiceProvider extends ServiceProvider
         $this->publishes([
             __DIR__.'/../config/rocketeers.php' => config_path('rocketeers.php'),
         ], 'config');
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                TestRocketeersCommand::class,
+            ]);
+        }
     }
 
     /**
