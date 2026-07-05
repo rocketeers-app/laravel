@@ -74,6 +74,16 @@ return [
 
 Add the `ROCKETEERS_API_TOKEN` to your `.env` file.
 
+## Testing the integration
+
+To verify that error reporting is wired up correctly, run:
+
+```bash
+php artisan rocketeers:test
+```
+
+This sends a test error to Rocketeers so you can confirm it arrives in your dashboard. The command checks that a `ROCKETEERS_API_TOKEN` is configured, warns when the current environment is not listed in `rocketeers.environments` (real errors would not be reported there), and reports the API error if sending fails.
+
 ### Changelog
 
 Please see [CHANGELOG](CHANGELOG.md) for more information what has changed recently.
