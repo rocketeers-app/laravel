@@ -58,6 +58,10 @@ return [
         'production',
     ],
 
+    'horizon' => [
+        'enabled' => env('ROCKETEERS_HORIZON_ACCESS', true),
+    ],
+
     'sensitive_fields' => [
         'password',
         'password_confirmation',
@@ -73,6 +77,20 @@ return [
 ```
 
 Add the `ROCKETEERS_API_TOKEN` to your `.env` file.
+
+## Horizon access
+
+When [Laravel Horizon](https://laravel.com/docs/horizon) is installed, this package lets Rocketeers reach the Horizon dashboard and its API by sending your `ROCKETEERS_API_TOKEN` as a bearer token:
+
+```
+Authorization: Bearer <ROCKETEERS_API_TOKEN>
+```
+
+No extra setup is needed. The package wraps the authorization callback that is already registered — your own `viewHorizon` gate and any `Horizon::auth()` callback keep working exactly as before, this only adds the token as an extra way in.
+
+Turn it off by setting `ROCKETEERS_HORIZON_ACCESS=false` in your `.env` file, or by setting `rocketeers.horizon.enabled` to `false`.
+
+Note that Horizon runs in the `web` middleware group, so its `POST` endpoints (retrying jobs, for example) are still subject to CSRF protection. Reading queue metrics over the API works out of the box; if you also want Rocketeers to perform actions, exclude `horizon/*` from CSRF verification in your application.
 
 ## Testing the integration
 
