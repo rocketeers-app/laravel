@@ -7,6 +7,10 @@ return [
         'production',
     ],
 
+    'horizon' => [
+        'enabled' => env('ROCKETEERS_HORIZON_ACCESS', true),
+    ],
+
     'sensitive_fields' => [
         'password',
         'password_confirmation',

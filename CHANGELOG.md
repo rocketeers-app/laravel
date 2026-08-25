@@ -2,6 +2,10 @@
 
 All notable changes to `rocketeers-laravel` will be documented in this file
 
+## 2.9.0 - 2026-08-25
+
+- Allow access to Laravel Horizon by sending the Rocketeers API token as a bearer token, configurable through `rocketeers.horizon.enabled`
+
 ## 2.8.0 - 2026-07-05
 
 - Add `rocketeers:test` Artisan command to verify the error reporting integration

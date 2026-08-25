@@ -39,6 +39,7 @@ class RocketeersLoggerServiceProvider extends ServiceProvider
         $this->mergeConfigFrom($source, 'rocketeers');
 
         $this->app->register(RocketeersEventServiceProvider::class);
+        $this->app->register(RocketeersHorizonServiceProvider::class);
 
         $this->app->singleton('rocketeers.client', function () {
             return new Rocketeers(config('rocketeers.api_token'));
