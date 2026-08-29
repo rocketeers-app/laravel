@@ -2,6 +2,11 @@
 
 All notable changes to `rocketeers-laravel` will be documented in this file
 
+## 2.10.0 - 2026-08-29
+
+- Add a signed, read-only `/rocketeers/horizon/stats` endpoint for the Rocketeers Horizon monitor, configurable through `rocketeers.horizon.secret`, `rocketeers.horizon.origin` and `rocketeers.horizon.ttl`
+- Test against Laravel 13 by allowing `orchestra/testbench` 11.x
+
 ## 2.9.0 - 2026-08-25
 
 - Allow access to Laravel Horizon by sending the Rocketeers API token as a bearer token, configurable through `rocketeers.horizon.enabled`
