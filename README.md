@@ -60,6 +60,9 @@ return [
 
     'horizon' => [
         'enabled' => env('ROCKETEERS_HORIZON_ACCESS', true),
+        'secret' => env('ROCKETEERS_HORIZON_SECRET'),
+        'origin' => env('ROCKETEERS_HORIZON_ORIGIN', 'https://app.rocketeersapp.com'),
+        'ttl' => (int) env('ROCKETEERS_HORIZON_TTL', 300),
     ],
 
     'sensitive_fields' => [
@@ -91,6 +94,39 @@ No extra setup is needed. The package wraps the authorization callback that is a
 Turn it off by setting `ROCKETEERS_HORIZON_ACCESS=false` in your `.env` file, or by setting `rocketeers.horizon.enabled` to `false`.
 
 Note that Horizon runs in the `web` middleware group, so its `POST` endpoints (retrying jobs, for example) are still subject to CSRF protection. Reading queue metrics over the API works out of the box; if you also want Rocketeers to perform actions, exclude `horizon/*` from CSRF verification in your application.
+
+## Horizon monitoring
+
+The Rocketeers dashboard shows every Horizon instance in one table, refreshing itself
+from the browser. To keep that fast it polls each application directly rather than
+proxying through Rocketeers, so this package exposes one read-only endpoint:
+
+```
+GET /rocketeers/horizon/stats?expires=<timestamp>&signature=<hmac>
+```
+
+It returns only aggregate counts — `status`, `processes`, `jobsPerMinute`,
+`failedJobs`, `recentJobs` and `wait`. Job payloads and Horizon's action endpoints
+are never reachable through it, so this is deliberately narrower than the bearer
+token access described above.
+
+Set the shared secret in your `.env` file:
+
+```
+ROCKETEERS_HORIZON_SECRET=<your Rocketeers environment id>
+```
+
+Rocketeers writes this for you when it provisions the environment. For an existing
+one, use **Insert › Horizon monitoring** in the Rocketeers env editor.
+
+The dashboard signs a short-lived URL with that secret and hands only the signature
+to the browser; requests without a valid, unexpired signature get a `403`. Leaving
+the secret empty keeps the endpoint closed.
+
+The endpoint sits outside the `web` middleware group — no session, no cookies, no
+CSRF token — and answers with an `Access-Control-Allow-Origin` header for the
+dashboard. Point that elsewhere with `ROCKETEERS_HORIZON_ORIGIN`, and change the
+signature lifetime with `ROCKETEERS_HORIZON_TTL` (seconds, default 300).
 
 ## Testing the integration
 

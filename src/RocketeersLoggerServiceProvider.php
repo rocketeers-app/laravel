@@ -18,6 +18,8 @@ class RocketeersLoggerServiceProvider extends ServiceProvider
      */
     public function boot()
     {
+        $this->loadRoutesFrom(__DIR__.'/../routes/rocketeers.php');
+
         $this->publishes([
             __DIR__.'/../config/rocketeers.php' => config_path('rocketeers.php'),
         ], 'config');
