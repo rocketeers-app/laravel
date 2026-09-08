@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
 use Monolog\Logger;
 use Rocketeers\Laravel\Console\Commands\TestRocketeersCommand;
+use Rocketeers\Laravel\Logging\RedactLogChannel;
+use Rocketeers\Redactor;
 use Rocketeers\Rocketeers;
 
 class RocketeersLoggerServiceProvider extends ServiceProvider
@@ -29,6 +31,36 @@ class RocketeersLoggerServiceProvider extends ServiceProvider
                 TestRocketeersCommand::class,
             ]);
         }
+
+        $this->redactLogChannels();
+    }
+
+    /**
+     * Redaction has to reach every channel, not just this package's: Laravel merges the
+     * ambient Context into each record's "extra", so a credential put there once is written
+     * to the log file and posted to Slack as well as reported here.
+     */
+    protected function redactLogChannels(): void
+    {
+        if (! config('rocketeers.redact_logs', true)) {
+            return;
+        }
+
+        foreach ((array) config('logging.channels', []) as $name => $channel) {
+            if (! is_array($channel) || ($channel['driver'] ?? null) === 'stack') {
+                continue;
+            }
+
+            $taps = (array) ($channel['tap'] ?? []);
+
+            if (in_array(RedactLogChannel::class, $taps, true)) {
+                continue;
+            }
+
+            $taps[] = RedactLogChannel::class;
+
+            config(['logging.channels.'.$name.'.tap' => $taps]);
+        }
     }
 
     /**
@@ -43,8 +75,13 @@ class RocketeersLoggerServiceProvider extends ServiceProvider
         $this->app->register(RocketeersEventServiceProvider::class);
         $this->app->register(RocketeersHorizonServiceProvider::class);
 
-        $this->app->singleton('rocketeers.client', function () {
-            return new Rocketeers(config('rocketeers.api_token'));
+        $this->app->singleton(Redactor::class, function () {
+            return new Redactor((array) config('rocketeers.sensitive_fields', []));
+        });
+
+        $this->app->singleton('rocketeers.client', function ($app) {
+            return (new Rocketeers(config('rocketeers.api_token')))
+                ->setRedactor($app->make(Redactor::class));
         });
 
         $this->app->bind(Rocketeers::class, 'rocketeers.client');

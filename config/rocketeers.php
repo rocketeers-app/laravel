@@ -32,15 +32,25 @@ return [
         'ttl' => (int) env('ROCKETEERS_HORIZON_TTL', 300),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Redaction
+    |--------------------------------------------------------------------------
+    |
+    | Reports are scrubbed by Rocketeers\Redactor before they leave the process.
+    | It already covers passwords, tokens, secrets, keys, signatures, cookies,
+    | sessions and card data, matched as a substring of the field name — so
+    | "secret" also covers "client_secret". List anything extra your app uses
+    | here; the built-in list is never replaced.
+    |
+    | `redact_logs` adds the same scrubbing to every log channel, not just this
+    | package's, because Laravel merges the ambient Context into each record.
+    |
+    */
+
     'sensitive_fields' => [
-        'password',
-        'password_confirmation',
-        'token',
-        'secret',
-        'credit_card',
-        'card_number',
-        'cvv',
-        'ssn',
-        'authorization',
+        //
     ],
+
+    'redact_logs' => env('ROCKETEERS_REDACT_LOGS', true),
 ];

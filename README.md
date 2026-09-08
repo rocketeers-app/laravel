@@ -66,18 +66,42 @@ return [
     ],
 
     'sensitive_fields' => [
-        'password',
-        'password_confirmation',
-        'token',
-        'secret',
-        'credit_card',
-        'card_number',
-        'cvv',
-        'ssn',
-        'authorization',
+        //
     ],
+
+    'redact_logs' => env('ROCKETEERS_REDACT_LOGS', true),
 ];
 ```
+
+## Redaction
+
+Reports are scrubbed by `Rocketeers\Redactor` before they leave the process. Every path into the
+API goes through `Rocketeers::report()`, so the Monolog handler, the queued-job listener and any
+report you build by hand are all covered.
+
+Field names are matched as a **substring**, lower-cased with dashes normalised to underscores, so
+one entry covers a family of names — `secret` also covers `client_secret`, and `token` also covers
+`refresh_token` and `X-Api-Key` (via `api_key`). Out of the box that list covers passwords, tokens,
+secrets, API and private keys, signatures, cookies, sessions and card data.
+
+Credentials that carry no field name to recognise them by are matched by shape: private key blocks,
+`Authorization: Bearer`/`Basic` headers, `MYSQL_PWD=`, `--password=`, `sshpass -p`, SQL
+`IDENTIFIED BY`, and credential-shaped query parameters in any URL (a signed URL's `signature`, an
+OAuth `code`). A string that holds JSON — a queued job's raw body, for instance — is decoded and
+walked rather than matched as one blob.
+
+Add anything your own app uses to `sensitive_fields`; the built-in list is never replaced:
+
+```php
+'sensitive_fields' => ['pincode', 'bsn'],
+```
+
+### Log channels
+
+`redact_logs` puts the same scrubbing on **every** log channel, not just this package's. Laravel
+merges the ambient `Context` into each record's `extra`, so a credential put there once would
+otherwise reach your log file and your Slack channel as well as Rocketeers. Set
+`ROCKETEERS_REDACT_LOGS=false` to leave your other channels alone.
 
 Add the `ROCKETEERS_API_TOKEN` to your `.env` file.
 

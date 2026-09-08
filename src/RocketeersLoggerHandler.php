@@ -8,6 +8,7 @@ use Monolog\Handler\AbstractProcessingHandler;
 use Monolog\Logger;
 use Monolog\LogRecord;
 use Rocketeers\Laravel\Concerns\ExtractsExceptionCode;
+use Rocketeers\Redactor;
 use Rocketeers\Rocketeers;
 use Symfony\Component\HttpFoundation\Exception\SessionNotFoundException;
 
@@ -195,25 +196,18 @@ class RocketeersLoggerHandler extends AbstractProcessingHandler
         }, $files);
     }
 
+    /**
+     * Matching a field name exactly missed `current_password`, `client_secret` and every other
+     * name that merely contains a sensitive word, so the shared redactor does the matching now.
+     * Rocketeers::report() runs the same redactor over the whole payload as a last gate.
+     */
     protected function filterSensitiveData(?array $data): ?array
     {
-        if ($data === null) {
-            return null;
-        }
+        return $data === null ? null : $this->redactor()->redactRequestData($data);
+    }
 
-        $sensitiveFields = config('rocketeers.sensitive_fields', [
-            'password', 'password_confirmation', 'token', 'secret',
-            'credit_card', 'card_number', 'cvv', 'ssn', 'authorization',
-        ]);
-
-        foreach ($data as $key => $value) {
-            if (in_array(strtolower($key), $sensitiveFields)) {
-                $data[$key] = '********';
-            } elseif (is_array($value)) {
-                $data[$key] = $this->filterSensitiveData($value);
-            }
-        }
-
-        return $data;
+    protected function redactor(): Redactor
+    {
+        return $this->client->redactor();
     }
 }
