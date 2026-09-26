@@ -1,0 +1,116 @@
+<?php
+
+namespace Rocketeers\Laravel;
+
+use Exception;
+use Illuminate\Log\Events\MessageLogged;
+use Illuminate\Log\LogManager;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\ServiceProvider;
+use Monolog\Logger;
+use Rocketeers\Laravel\Console\Commands\TestRocketeersCommand;
+use Rocketeers\Laravel\Logging\RedactLogChannel;
+use Rocketeers\Redactor;
+use Rocketeers\Rocketeers;
+
+class RocketeersLoggerServiceProvider extends ServiceProvider
+{
+    /**
+     * Bootstrap the application services.
+     */
+    public function boot()
+    {
+        $this->loadRoutesFrom(__DIR__.'/../routes/rocketeers.php');
+
+        $this->publishes([
+            __DIR__.'/../config/rocketeers.php' => config_path('rocketeers.php'),
+        ], 'config');
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                TestRocketeersCommand::class,
+            ]);
+        }
+
+        $this->redactLogChannels();
+    }
+
+    /**
+     * Redaction has to reach every channel, not just this package's: Laravel merges the
+     * ambient Context into each record's "extra", so a credential put there once is written
+     * to the log file and posted to Slack as well as reported here.
+     */
+    protected function redactLogChannels(): void
+    {
+        if (! config('rocketeers.redact_logs', true)) {
+            return;
+        }
+
+        foreach ((array) config('logging.channels', []) as $name => $channel) {
+            if (! is_array($channel) || ($channel['driver'] ?? null) === 'stack') {
+                continue;
+            }
+
+            $taps = (array) ($channel['tap'] ?? []);
+
+            if (in_array(RedactLogChannel::class, $taps, true)) {
+                continue;
+            }
+
+            $taps[] = RedactLogChannel::class;
+
+            config(['logging.channels.'.$name.'.tap' => $taps]);
+        }
+    }
+
+    /**
+     * Register the application services.
+     */
+    public function register()
+    {
+        $source = realpath($raw = __DIR__.'/../config/rocketeers.php') ?: $raw;
+
+        $this->mergeConfigFrom($source, 'rocketeers');
+
+        $this->app->register(RocketeersEventServiceProvider::class);
+        $this->app->register(RocketeersHorizonServiceProvider::class);
+
+        $this->app->singleton(Redactor::class, function () {
+            return new Redactor((array) config('rocketeers.sensitive_fields', []));
+        });
+
+        $this->app->singleton('rocketeers.client', function ($app) {
+            return (new Rocketeers(config('rocketeers.api_token')))
+                ->setRedactor($app->make(Redactor::class));
+        });
+
+        $this->app->bind(Rocketeers::class, 'rocketeers.client');
+
+        $this->app->singleton('rocketeers.logger', function ($app) {
+            $handler = new RocketeersLoggerHandler($app->make('rocketeers.client'));
+
+            $logger = new Logger('Rocketeers');
+            $logger->pushHandler($handler);
+
+            return $logger;
+        });
+
+        if ($this->app['log'] instanceof LogManager) {
+            Log::extend('rocketeers', function ($app) {
+                return $app['rocketeers.logger'];
+            });
+        } else {
+            $this->app['log']->listen(function (MessageLogged $messageLogged) {
+                try {
+                    $this->app['rocketeers.logger']->report([
+                        'level' => $messageLogged->level,
+                        'message' => $messageLogged->message,
+                        'context' => $messageLogged->context,
+                    ]);
+                } catch (Exception $exception) {
+                    return;
+                }
+            });
+        }
+    }
+}

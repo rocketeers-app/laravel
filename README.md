@@ -1,0 +1,188 @@
+# Rocketeers for Laravel
+
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/rocketeers-app/rocketeers-laravel.svg?style=flat-square)](https://packagist.org/packages/rocketeers-app/rocketeers-laravel)
+[![Build Status](https://img.shields.io/travis/rocketeers-app/rocketeers-laravel/master.svg?style=flat-square)](https://travis-ci.org/rocketeers-app/rocketeers-laravel)
+[![Quality Score](https://img.shields.io/scrutinizer/g/rocketeers-app/rocketeers-laravel.svg?style=flat-square)](https://scrutinizer-ci.com/g/rocketeers-app/rocketeers-laravel)
+[![Total Downloads](https://img.shields.io/packagist/dt/rocketeers-app/rocketeers-laravel.svg?style=flat-square)](https://packagist.org/packages/rocketeers-app/rocketeers-laravel)
+
+Laravel integration package with Rocketeers app.
+
+## Installation
+
+You can install this package via Composer:
+
+```bash
+composer require rocketeers-app/rocketeers-laravel
+```
+
+Configure `rocketeers` in your `stack` logging configuration, so you keep your normal logging with additional Rocketeers logging:
+
+```php
+'channels' => [
+
+    'stack' => [
+        'driver' => 'stack',
+        'channels' => ['rocketeers', 'daily'],
+        'ignore_exceptions' => false,
+    ],
+
+    'rocketeers' => [
+        'driver' => 'rocketeers',
+        'level' => 'debug',
+    ],
+
+    // ...
+```
+
+Make sure that in the logging configuration the default log channel is `stack`:
+
+```php
+'default' => env('LOG_CHANNEL', 'stack'),
+```
+
+Publish the configuration file:
+
+```bash
+php artisan vendor:publish --provider="Rocketeers\Laravel\RocketeersLoggerServiceProvider" --tag="config"
+```
+
+This will create a `config/rocketeers.php` file with the following defaults:
+
+```php
+<?php
+
+return [
+    'api_token' => env('ROCKETEERS_API_TOKEN'),
+
+    'environments' => [
+        'production',
+    ],
+
+    'horizon' => [
+        'enabled' => env('ROCKETEERS_HORIZON_ACCESS', true),
+        'secret' => env('ROCKETEERS_HORIZON_SECRET'),
+        'origin' => env('ROCKETEERS_HORIZON_ORIGIN', 'https://app.rocketeersapp.com'),
+        'ttl' => (int) env('ROCKETEERS_HORIZON_TTL', 300),
+    ],
+
+    'sensitive_fields' => [
+        //
+    ],
+
+    'redact_logs' => env('ROCKETEERS_REDACT_LOGS', true),
+];
+```
+
+## Redaction
+
+Reports are scrubbed by `Rocketeers\Redactor` before they leave the process. Every path into the
+API goes through `Rocketeers::report()`, so the Monolog handler, the queued-job listener and any
+report you build by hand are all covered.
+
+Field names are matched as a **substring**, lower-cased with dashes normalised to underscores, so
+one entry covers a family of names — `secret` also covers `client_secret`, and `token` also covers
+`refresh_token` and `X-Api-Key` (via `api_key`). Out of the box that list covers passwords, tokens,
+secrets, API and private keys, signatures, cookies, sessions and card data.
+
+Credentials that carry no field name to recognise them by are matched by shape: private key blocks,
+`Authorization: Bearer`/`Basic` headers, `MYSQL_PWD=`, `--password=`, `sshpass -p`, SQL
+`IDENTIFIED BY`, and credential-shaped query parameters in any URL (a signed URL's `signature`, an
+OAuth `code`). A string that holds JSON — a queued job's raw body, for instance — is decoded and
+walked rather than matched as one blob.
+
+Add anything your own app uses to `sensitive_fields`; the built-in list is never replaced:
+
+```php
+'sensitive_fields' => ['pincode', 'bsn'],
+```
+
+### Log channels
+
+`redact_logs` puts the same scrubbing on **every** log channel, not just this package's. Laravel
+merges the ambient `Context` into each record's `extra`, so a credential put there once would
+otherwise reach your log file and your Slack channel as well as Rocketeers. Set
+`ROCKETEERS_REDACT_LOGS=false` to leave your other channels alone.
+
+Add the `ROCKETEERS_API_TOKEN` to your `.env` file.
+
+## Horizon access
+
+When [Laravel Horizon](https://laravel.com/docs/horizon) is installed, this package lets Rocketeers reach the Horizon dashboard and its API by sending your `ROCKETEERS_API_TOKEN` as a bearer token:
+
+```
+Authorization: Bearer <ROCKETEERS_API_TOKEN>
+```
+
+No extra setup is needed. The package wraps the authorization callback that is already registered — your own `viewHorizon` gate and any `Horizon::auth()` callback keep working exactly as before, this only adds the token as an extra way in.
+
+Turn it off by setting `ROCKETEERS_HORIZON_ACCESS=false` in your `.env` file, or by setting `rocketeers.horizon.enabled` to `false`.
+
+Note that Horizon runs in the `web` middleware group, so its `POST` endpoints (retrying jobs, for example) are still subject to CSRF protection. Reading queue metrics over the API works out of the box; if you also want Rocketeers to perform actions, exclude `horizon/*` from CSRF verification in your application.
+
+## Horizon monitoring
+
+The Rocketeers dashboard shows every Horizon instance in one table, refreshing itself
+from the browser. To keep that fast it polls each application directly rather than
+proxying through Rocketeers, so this package exposes one read-only endpoint:
+
+```
+GET /rocketeers/horizon/stats?expires=<timestamp>&signature=<hmac>
+```
+
+It returns only aggregate counts — `status`, `processes`, `jobsPerMinute`,
+`failedJobs`, `recentJobs` and `wait`. Job payloads and Horizon's action endpoints
+are never reachable through it, so this is deliberately narrower than the bearer
+token access described above.
+
+Set the shared secret in your `.env` file:
+
+```
+ROCKETEERS_HORIZON_SECRET=<your Rocketeers environment id>
+```
+
+Rocketeers writes this for you when it provisions the environment. For an existing
+one, use **Insert › Horizon monitoring** in the Rocketeers env editor.
+
+The dashboard signs a short-lived URL with that secret and hands only the signature
+to the browser; requests without a valid, unexpired signature get a `403`. Leaving
+the secret empty keeps the endpoint closed.
+
+The endpoint sits outside the `web` middleware group — no session, no cookies, no
+CSRF token — and answers with an `Access-Control-Allow-Origin` header for the
+dashboard. Point that elsewhere with `ROCKETEERS_HORIZON_ORIGIN`, and change the
+signature lifetime with `ROCKETEERS_HORIZON_TTL` (seconds, default 300).
+
+## Testing the integration
+
+To verify that error reporting is wired up correctly, run:
+
+```bash
+php artisan rocketeers:test
+```
+
+This sends a test error to Rocketeers so you can confirm it arrives in your dashboard. The command checks that a `ROCKETEERS_API_TOKEN` is configured, warns when the current environment is not listed in `rocketeers.environments` (real errors would not be reported there), and reports the API error if sending fails.
+
+### Changelog
+
+Please see [CHANGELOG](CHANGELOG.md) for more information what has changed recently.
+
+For Laravel 10.x and up use `v2.0.0`.
+
+For Laravel 9.x and below use `v1.0.0` or the `release/v1` branch.
+
+## Contributing
+
+Please see [CONTRIBUTING](CONTRIBUTING.md) for details.
+
+### Security
+
+If you discover any security related issues, please email mark@vaneijk.co instead of using the issue tracker.
+
+## Credits
+
+- [Mark van Eijk](https://github.com/markvaneijk)
+- [All Contributors](../../contributors)
+
+## License
+
+The MIT License (MIT). Please see [License File](LICENSE.md) for more information.
