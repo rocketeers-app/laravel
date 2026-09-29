@@ -15,30 +15,15 @@ You can install this package via Composer:
 composer require rocketeers-app/rocketeers-laravel
 ```
 
-Configure `rocketeers` in your `stack` logging configuration, so you keep your normal logging with additional Rocketeers logging:
+You don't need to change your logging configuration. The package registers a `rocketeers` log channel and adds it to your default `stack` channel, so your normal logging keeps working and exceptions are also reported to Rocketeers.
 
-```php
-'channels' => [
-
-    'stack' => [
-        'driver' => 'stack',
-        'channels' => ['rocketeers', 'daily'],
-        'ignore_exceptions' => false,
-    ],
-
-    'rocketeers' => [
-        'driver' => 'rocketeers',
-        'level' => 'debug',
-    ],
-
-    // ...
-```
-
-Make sure that in the logging configuration the default log channel is `stack`:
+This only happens when your default log channel is a `stack`, which is the Laravel default:
 
 ```php
 'default' => env('LOG_CHANNEL', 'stack'),
 ```
+
+If you use another default channel, add `rocketeers` to a stack yourself. To change the channel's settings, define your own `rocketeers` channel in `config/logging.php`. The package leaves it as it is.
 
 Publish the configuration file:
 

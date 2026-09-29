@@ -63,6 +63,30 @@ class RocketeersLoggerServiceProvider extends ServiceProvider
         }
     }
 
+    protected function registerLogChannel(): void
+    {
+        if (! config()->has('logging.channels.rocketeers')) {
+            config(['logging.channels.rocketeers' => [
+                'driver' => 'rocketeers',
+                'level' => 'debug',
+            ]]);
+        }
+
+        $stack = 'logging.channels.'.config('logging.default');
+
+        if (config($stack.'.driver') !== 'stack') {
+            return;
+        }
+
+        $channels = (array) config($stack.'.channels', []);
+
+        if (in_array('rocketeers', $channels, true)) {
+            return;
+        }
+
+        config([$stack.'.channels' => [...$channels, 'rocketeers']]);
+    }
+
     /**
      * Register the application services.
      */
@@ -99,6 +123,8 @@ class RocketeersLoggerServiceProvider extends ServiceProvider
             Log::extend('rocketeers', function ($app) {
                 return $app['rocketeers.logger'];
             });
+
+            $this->registerLogChannel();
         } else {
             $this->app['log']->listen(function (MessageLogged $messageLogged) {
                 try {

@@ -2,6 +2,10 @@
 
 All notable changes to `rocketeers-laravel` will be documented in this file
 
+## Unreleased
+
+- Register the `rocketeers` log channel and add it to the default `stack` channel automatically, so `config/logging.php` no longer needs changes
+
 ## 2.11.0 - 2026-09-08
 
 - Redact credentials from reports using the shared `Rocketeers\Redactor`, replacing the exact-name field filter that missed `current_password`, `client_secret` and every other compound name
