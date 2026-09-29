@@ -2,7 +2,7 @@
 
 All notable changes to `rocketeers-laravel` will be documented in this file
 
-## Unreleased
+## 2.19.0 - 2026-09-29
 
 - Register the `rocketeers` log channel and add it to the default `stack` channel automatically, so `config/logging.php` no longer needs changes
 
