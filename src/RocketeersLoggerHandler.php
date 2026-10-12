@@ -4,6 +4,8 @@ namespace Rocketeers\Laravel;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Context;
 use Monolog\Handler\AbstractProcessingHandler;
 use Monolog\Logger;
 use Monolog\LogRecord;
@@ -45,7 +47,7 @@ class RocketeersLoggerHandler extends AbstractProcessingHandler
                 'code' => $this->getCodeFromException($record['context']['exception'] ?? null),
                 'exception' => $this->getException($record),
                 'message' => $this->getMessage($record),
-                'context' => $record['context'],
+                'context' => $this->getContext($record),
                 'datetime' => $record['datetime'],
                 'extra' => $record['extra'] ?: null,
                 'level' => $record['level'],
@@ -92,6 +94,17 @@ class RocketeersLoggerHandler extends AbstractProcessingHandler
         }
 
         return null;
+    }
+
+    public function getContext(LogRecord $record): ?array
+    {
+        $logContext = Arr::except($record['context'], 'exception');
+
+        if (class_exists(Context::class)) {
+            $logContext = array_merge(Context::all(), $logContext);
+        }
+
+        return $logContext ?: null;
     }
 
     public function getMessage(LogRecord $record): ?string

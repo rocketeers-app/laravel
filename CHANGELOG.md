@@ -2,6 +2,10 @@
 
 All notable changes to `rocketeers-laravel` will be documented in this file
 
+## 2.20.0 - 2026-10-12
+
+- Send the ambient Laravel `Context` and the log context (without the exception) as `context`
+
 ## 2.19.0 - 2026-09-29
 
 - Register the `rocketeers` log channel and add it to the default `stack` channel automatically, so `config/logging.php` no longer needs changes

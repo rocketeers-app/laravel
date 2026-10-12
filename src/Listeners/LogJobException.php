@@ -3,6 +3,7 @@
 namespace Rocketeers\Laravel\Listeners;
 
 use Illuminate\Queue\Events\JobExceptionOccurred;
+use Illuminate\Support\Facades\Context;
 use Rocketeers\Laravel\Concerns\ExtractsExceptionCode;
 use Rocketeers\Rocketeers;
 
@@ -37,6 +38,7 @@ class LogJobException
                 'queue' => $event->job->getQueue(),
                 'job' => $event->job->resolveName() ?? $event->job->getName(),
                 'body' => $event->job->getRawBody(),
+                'context' => class_exists(Context::class) ? (Context::all() ?: null) : null,
             ]);
         } catch (\Throwable $e) {
             // Silently fail to prevent error loops

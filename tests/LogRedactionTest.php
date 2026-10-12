@@ -154,4 +154,67 @@ class LogRedactionTest extends TestCase
         $this->assertStringNotContainsString('super-secret-value', $client->reports[0]['body']);
         $this->assertStringContainsString('SyncStorages', $client->reports[0]['body']);
     }
+
+    public function test_it_reports_the_ambient_context_and_the_log_context_without_the_exception()
+    {
+        $client = $this->recordingClient();
+
+        Context::add('order', 42);
+        Context::addHidden('internal', 'x');
+
+        Log::channel('rocketeers')->error('boom', ['exception' => new RuntimeException('boom'), 'job_id' => 7]);
+
+        $this->assertSame(['order' => 42, 'job_id' => 7], $client->reports[0]['context']);
+    }
+
+    public function test_it_lets_the_log_context_win_over_the_ambient_context()
+    {
+        $client = $this->recordingClient();
+
+        Context::add('order', 42);
+
+        Log::channel('rocketeers')->error('boom', ['exception' => new RuntimeException('boom'), 'order' => 43]);
+
+        $this->assertSame(['order' => 43], $client->reports[0]['context']);
+    }
+
+    public function test_it_redacts_a_credential_in_the_reported_context()
+    {
+        $client = $this->recordingClient();
+
+        Context::add('s3_config', ['credentials' => ['secret' => 'super-secret-value']]);
+
+        Log::channel('rocketeers')->error('boom', ['exception' => new RuntimeException('boom')]);
+
+        $this->assertSame('[redacted]', $client->reports[0]['context']['s3_config']['credentials']);
+        $this->assertStringNotContainsString('super-secret-value', json_encode($client->reports[0]));
+    }
+
+    public function test_it_reports_no_context_when_there_is_none()
+    {
+        $client = $this->recordingClient();
+
+        Log::channel('rocketeers')->error('boom', ['exception' => new RuntimeException('boom')]);
+
+        $this->assertNull($client->reports[0]['context']);
+    }
+
+    public function test_it_reports_the_ambient_context_of_a_failed_job()
+    {
+        $client = $this->recordingClient();
+
+        Context::add('tenant', 'acme');
+
+        $job = Mockery::mock(Job::class);
+        $job->shouldReceive('getConnectionName')->andReturn('redis');
+        $job->shouldReceive('getQueue')->andReturn('default');
+        $job->shouldReceive('resolveName')->andReturn('App\Jobs\SyncStorages');
+        $job->shouldReceive('getRawBody')->andReturn('{}');
+
+        (new LogJobException($client))->handle(
+            new JobExceptionOccurred('redis', $job, new RuntimeException('boom'))
+        );
+
+        $this->assertSame(['tenant' => 'acme'], $client->reports[0]['context']);
+    }
 }
