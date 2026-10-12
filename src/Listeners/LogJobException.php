@@ -5,6 +5,7 @@ namespace Rocketeers\Laravel\Listeners;
 use Illuminate\Queue\Events\JobExceptionOccurred;
 use Illuminate\Support\Facades\Context;
 use Rocketeers\Laravel\Concerns\ExtractsExceptionCode;
+use Rocketeers\Laravel\Support\StackTrace;
 use Rocketeers\Rocketeers;
 
 class LogJobException
@@ -32,7 +33,7 @@ class LogJobException
                 'message' => $event->exception->getMessage(),
                 'file' => $event->exception->getFile(),
                 'line' => $event->exception->getLine(),
-                'trace' => $event->exception->getTrace(),
+                'trace' => StackTrace::frames($event->exception, base_path()),
                 'url' => config('app.url'),
                 'connection' => $event->job->getConnectionName(),
                 'queue' => $event->job->getQueue(),

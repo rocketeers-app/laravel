@@ -2,6 +2,13 @@
 
 All notable changes to `rocketeers-laravel` will be documented in this file
 
+## 2.21.0 - 2026-10-12
+
+- Send the trace as frames: the throw site first, every frame with its own function, a path relative to `base_path()`, whether it is an application or a vendor frame, and the 29 lines of code around its line
+- Stop sending the arguments of each frame
+- Drop the code of vendor frames, then every frame past the 50th, when the trace would exceed 512 KB
+- Require `rocketeers-app/rocketeers-api-client` 2.21, which redacts that code
+
 ## 2.20.0 - 2026-10-12
 
 - Send the ambient Laravel `Context` and the log context (without the exception) as `context`

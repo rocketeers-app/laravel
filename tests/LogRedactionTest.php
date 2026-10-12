@@ -5,6 +5,7 @@ namespace Rocketeers\Laravel\Tests;
 use Illuminate\Contracts\Queue\Job;
 use Illuminate\Http\Request;
 use Illuminate\Queue\Events\JobExceptionOccurred;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Log;
 use Mockery;
@@ -126,7 +127,7 @@ class LogRedactionTest extends TestCase
 
         $this->assertSame('[redacted]', $client->reports[0]['querystring']['code']);
         $this->assertSame('3', $client->reports[0]['querystring']['team']);
-        $this->assertStringNotContainsString('4ab19c', json_encode($client->reports[0]));
+        $this->assertStringNotContainsString('4ab19c', json_encode(Arr::except($client->reports[0], 'trace')));
     }
 
     /**
@@ -187,7 +188,7 @@ class LogRedactionTest extends TestCase
         Log::channel('rocketeers')->error('boom', ['exception' => new RuntimeException('boom')]);
 
         $this->assertSame('[redacted]', $client->reports[0]['context']['s3_config']['credentials']);
-        $this->assertStringNotContainsString('super-secret-value', json_encode($client->reports[0]));
+        $this->assertStringNotContainsString('super-secret-value', json_encode(Arr::except($client->reports[0], 'trace')));
     }
 
     public function test_it_reports_no_context_when_there_is_none()
@@ -216,5 +217,61 @@ class LogRedactionTest extends TestCase
         );
 
         $this->assertSame(['tenant' => 'acme'], $client->reports[0]['context']);
+    }
+
+    public function test_it_reports_the_trace_as_frames_with_the_code_around_each_line()
+    {
+        $client = $this->recordingClient();
+
+        $this->app->setBasePath(dirname(__DIR__));
+
+        $exception = new RuntimeException('boom');
+
+        Log::channel('rocketeers')->error('boom', ['exception' => $exception]);
+
+        $frame = $client->reports[0]['trace'][0];
+
+        $this->assertSame('tests/LogRedactionTest.php', $frame['file']);
+        $this->assertSame($exception->getLine(), $frame['line']);
+        $this->assertSame(self::class, $frame['class']);
+        $this->assertSame(__FUNCTION__, $frame['function']);
+        $this->assertTrue($frame['application_frame']);
+        $this->assertSame("        \$exception = new RuntimeException('boom');", $frame['code_snippet'][$exception->getLine()]);
+        $this->assertArrayNotHasKey('args', $frame);
+        $this->assertSame(__FILE__, $client->reports[0]['file']);
+        $this->assertFalse(collect($client->reports[0]['trace'])->firstWhere('class', \PHPUnit\Framework\TestCase::class)['application_frame']);
+    }
+
+    public function test_it_reports_a_string_exception_as_its_own_trace()
+    {
+        $client = $this->recordingClient();
+
+        Log::channel('rocketeers')->error('boom', ['exception' => 'Something broke']);
+
+        $this->assertSame('Something broke', $client->reports[0]['trace']);
+    }
+
+    public function test_it_reports_the_trace_of_a_failed_job_as_frames()
+    {
+        $client = $this->recordingClient();
+
+        $this->app->setBasePath(dirname(__DIR__));
+
+        $job = Mockery::mock(Job::class);
+        $job->shouldReceive('getConnectionName')->andReturn('redis');
+        $job->shouldReceive('getQueue')->andReturn('default');
+        $job->shouldReceive('resolveName')->andReturn('App\Jobs\SyncStorages');
+        $job->shouldReceive('getRawBody')->andReturn('{}');
+
+        $exception = new RuntimeException('boom');
+
+        (new LogJobException($client))->handle(new JobExceptionOccurred('redis', $job, $exception));
+
+        $frame = $client->reports[0]['trace'][0];
+
+        $this->assertSame('tests/LogRedactionTest.php', $frame['file']);
+        $this->assertSame($exception->getLine(), $frame['line']);
+        $this->assertSame(__FUNCTION__, $frame['function']);
+        $this->assertArrayHasKey($exception->getLine(), $frame['code_snippet']);
     }
 }

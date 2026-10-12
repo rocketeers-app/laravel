@@ -10,9 +10,11 @@ use Monolog\Handler\AbstractProcessingHandler;
 use Monolog\Logger;
 use Monolog\LogRecord;
 use Rocketeers\Laravel\Concerns\ExtractsExceptionCode;
+use Rocketeers\Laravel\Support\StackTrace;
 use Rocketeers\Redactor;
 use Rocketeers\Rocketeers;
 use Symfony\Component\HttpFoundation\Exception\SessionNotFoundException;
+use Throwable;
 
 class RocketeersLoggerHandler extends AbstractProcessingHandler
 {
@@ -72,7 +74,7 @@ class RocketeersLoggerHandler extends AbstractProcessingHandler
                 'hostname' => $this->getHostname($request),
                 'command' => trim(implode(' ', $request->server('argv', null) ?: [])),
             ]);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             // Silently fail to prevent infinite error loops
         }
     }
@@ -148,7 +150,7 @@ class RocketeersLoggerHandler extends AbstractProcessingHandler
             return $exception;
         }
 
-        return $exception?->getTrace();
+        return $exception instanceof Throwable ? StackTrace::frames($exception, base_path()) : null;
     }
 
     public function getHostname(Request $request): ?string

@@ -4,6 +4,7 @@ namespace Rocketeers\Laravel\Console\Commands;
 
 use Exception;
 use Illuminate\Console\Command;
+use Rocketeers\Laravel\Support\StackTrace;
 use Rocketeers\Rocketeers;
 
 class TestRocketeersCommand extends Command
@@ -45,7 +46,7 @@ class TestRocketeersCommand extends Command
                 'message' => $exception->getMessage(),
                 'file' => $exception->getFile(),
                 'line' => $exception->getLine(),
-                'trace' => $exception->getTrace(),
+                'trace' => StackTrace::frames($exception, base_path()),
                 'url' => config('app.url'),
             ]);
         } catch (\Throwable $e) {
