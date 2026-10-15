@@ -113,44 +113,50 @@ class RocketeersLoggerHandler extends AbstractProcessingHandler
     {
         $exception = $record['context']['exception'] ?? null;
 
-        if (is_string($exception)) {
-            return $exception;
+        if ($exception instanceof Throwable) {
+            return $exception->getMessage();
         }
 
-        return $exception?->getMessage();
+        return $this->contextString($record, 'message')
+            ?? (filled($record['message']) ? (string) $record['message'] : null);
     }
 
     public function getFile(LogRecord $record): ?string
     {
         $exception = $record['context']['exception'] ?? null;
 
-        if (is_string($exception)) {
-            return $exception;
+        if ($exception instanceof Throwable) {
+            return $exception->getFile();
         }
 
-        return $exception?->getFile();
+        return $this->contextString($record, 'file');
     }
 
     public function getLine(LogRecord $record): ?string
     {
         $exception = $record['context']['exception'] ?? null;
 
-        if (is_string($exception)) {
-            return $exception;
+        if ($exception instanceof Throwable) {
+            return (string) $exception->getLine();
         }
 
-        return $exception?->getLine();
+        $line = $record['context']['line'] ?? null;
+
+        return is_int($line) || (is_string($line) && ctype_digit($line)) ? (string) $line : null;
     }
 
-    public function getTrace(LogRecord $record): array|string|null
+    public function getTrace(LogRecord $record): ?array
     {
         $exception = $record['context']['exception'] ?? null;
 
-        if (is_string($exception)) {
-            return $exception;
-        }
-
         return $exception instanceof Throwable ? StackTrace::frames($exception, base_path()) : null;
+    }
+
+    protected function contextString(LogRecord $record, string $key): ?string
+    {
+        $value = $record['context'][$key] ?? null;
+
+        return is_string($value) && trim($value) !== '' ? $value : null;
     }
 
     public function getHostname(Request $request): ?string

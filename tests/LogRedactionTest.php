@@ -242,13 +242,16 @@ class LogRedactionTest extends TestCase
         $this->assertFalse(collect($client->reports[0]['trace'])->firstWhere('class', \PHPUnit\Framework\TestCase::class)['application_frame']);
     }
 
-    public function test_it_reports_a_string_exception_as_its_own_trace()
+    public function test_it_reports_a_string_exception_without_echoing_it_into_message_file_and_trace()
     {
         $client = $this->recordingClient();
 
         Log::channel('rocketeers')->error('boom', ['exception' => 'Something broke']);
 
-        $this->assertSame('Something broke', $client->reports[0]['trace']);
+        $this->assertSame('Something broke', $client->reports[0]['exception']);
+        $this->assertSame('boom', $client->reports[0]['message']);
+        $this->assertNull($client->reports[0]['file']);
+        $this->assertNull($client->reports[0]['trace']);
     }
 
     public function test_it_reports_the_trace_of_a_failed_job_as_frames()
