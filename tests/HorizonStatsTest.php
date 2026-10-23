@@ -6,6 +6,7 @@ use Laravel\Horizon\Contracts\JobRepository;
 use Laravel\Horizon\Contracts\MasterSupervisorRepository;
 use Laravel\Horizon\Contracts\MetricsRepository;
 use Laravel\Horizon\Contracts\SupervisorRepository;
+use Laravel\Horizon\Contracts\WorkloadRepository;
 use Laravel\Horizon\WaitTimeCalculator;
 use Orchestra\Testbench\TestCase;
 use Rocketeers\Laravel\RocketeersLoggerServiceProvider;
@@ -47,7 +48,17 @@ class HorizonStatsTest extends TestCase
             ->shouldReceive('all')->andReturn([$supervisor]);
 
         $this->mock(MetricsRepository::class)
-            ->shouldReceive('jobsProcessedPerMinute')->andReturn(12);
+            ->shouldReceive('jobsProcessedPerMinute')->andReturn(12)
+            ->shouldReceive('measuredQueues')->andReturn(['default', 'emails'])
+            ->shouldReceive('throughputForQueue')->with('default')->andReturn(30)
+            ->shouldReceive('throughputForQueue')->with('emails')->andReturn(6)
+            ->shouldReceive('runtimeForQueue')->with('default')->andReturn(250.0)
+            ->shouldReceive('runtimeForQueue')->with('emails')->andReturn(1200.0);
+
+        $this->mock(WorkloadRepository::class)
+            ->shouldReceive('get')->andReturn([
+                ['name' => 'default', 'length' => 40, 'wait' => 7, 'processes' => 3, 'split_queues' => null],
+            ]);
 
         $this->mock(JobRepository::class)
             ->shouldReceive('countRecentlyFailed')->andReturn(2)
@@ -80,9 +91,22 @@ class HorizonStatsTest extends TestCase
         $keys = array_keys($this->get($this->url(time() + 300))->json());
 
         $this->assertEqualsCanonicalizing(
-            ['status', 'processes', 'jobsPerMinute', 'failedJobs', 'recentJobs', 'wait'],
+            ['status', 'processes', 'jobsPerMinute', 'failedJobs', 'recentJobs', 'wait', 'queues'],
             $keys
         );
+    }
+
+    public function test_it_reports_the_workload_of_each_queue()
+    {
+        $this->fakeHorizon();
+
+        $queues = collect($this->get($this->url(time() + 300))->json('queues'))->keyBy('name');
+
+        $this->assertSame(['name' => 'default', 'length' => 40, 'wait' => 7, 'processes' => 3, 'throughput' => 30, 'runtime' => 250], $queues['default']);
+        $this->assertSame('emails', $queues['emails']['name']);
+        $this->assertNull($queues['emails']['wait']);
+        $this->assertNull($queues['emails']['processes']);
+        $this->assertSame(1200, $queues['emails']['runtime']);
     }
 
     public function test_it_rejects_an_expired_signature()
