@@ -2,6 +2,12 @@
 
 All notable changes to `rocketeers-laravel` will be documented in this file
 
+## 2.22.0 - 2026-10-23
+
+- Add `queues` to the `/rocketeers/horizon/stats` endpoint: per queue its length, wait and processes from Horizon's workload, and its jobs per minute and average runtime from Horizon's metrics, for Rocketeers queue autoscaling
+- Queues processed by `queue:work` rather than a Horizon supervisor are included through Horizon's metrics, with their length read from the queue and no wait or process count
+- Still no job payloads: the endpoint stays a whitelisted subset
+
 ## 2.21.0 - 2026-10-12
 
 - Send the trace as frames: the throw site first, every frame with its own function, a path relative to `base_path()`, whether it is an application or a vendor frame, and the 29 lines of code around its line
