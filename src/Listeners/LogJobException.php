@@ -2,6 +2,7 @@
 
 namespace Rocketeers\Laravel\Listeners;
 
+use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Queue\Events\JobExceptionOccurred;
 use Illuminate\Support\Facades\Context;
 use Rocketeers\Laravel\Concerns\ExtractsExceptionCode;
@@ -22,6 +23,13 @@ class LogJobException
     public function handle(JobExceptionOccurred $event)
     {
         if (! in_array(app()->environment(), config('rocketeers.environments'))) {
+            return;
+        }
+
+        // This listener reports straight to the client, past the exception handler, so it has
+        // to ask the handler itself: otherwise ShouldntReport and dontReport() mean nothing for
+        // an exception thrown in a job.
+        if (! app(ExceptionHandler::class)->shouldReport($event->exception)) {
             return;
         }
 

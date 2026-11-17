@@ -2,6 +2,10 @@
 
 All notable changes to `rocketeers-laravel` will be documented in this file
 
+## 2.23.7 - 2026-11-17
+
+- Skip an exception thrown in a queued job when the exception handler would not report it, so `ShouldntReport` and `dontReport()` / `ignore()` now hold for jobs too instead of only for the log channel
+
 ## 2.22.0 - 2026-10-23
 
 - Add `queues` to the `/rocketeers/horizon/stats` endpoint: per queue its length, wait and processes from Horizon's workload, and its jobs per minute and average runtime from Horizon's metrics, for Rocketeers queue autoscaling
