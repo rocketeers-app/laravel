@@ -8,7 +8,9 @@ use Illuminate\Log\LogManager;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
 use Monolog\Logger;
+use Rocketeers\Laravel\Console\Commands\RunAgentCommand;
 use Rocketeers\Laravel\Console\Commands\TestRocketeersCommand;
+use Rocketeers\Laravel\Ingest\AgentAwareRocketeers;
 use Rocketeers\Laravel\Logging\RedactLogChannel;
 use Rocketeers\Redactor;
 use Rocketeers\Rocketeers;
@@ -29,6 +31,7 @@ class RocketeersLoggerServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 TestRocketeersCommand::class,
+                RunAgentCommand::class,
             ]);
         }
 
@@ -98,13 +101,18 @@ class RocketeersLoggerServiceProvider extends ServiceProvider
 
         $this->app->register(RocketeersEventServiceProvider::class);
         $this->app->register(RocketeersHorizonServiceProvider::class);
+        $this->app->register(RocketeersIngestServiceProvider::class);
 
         $this->app->singleton(Redactor::class, function () {
             return new Redactor((array) config('rocketeers.sensitive_fields', []));
         });
 
         $this->app->singleton('rocketeers.client', function ($app) {
-            return (new Rocketeers(config('rocketeers.api_token')))
+            if (! empty($url = config('rocketeers.api_url'))) {
+                Rocketeers::setBaseUrl(rtrim((string) $url, '/'));
+            }
+
+            return (new AgentAwareRocketeers(config('rocketeers.api_token'), $app))
                 ->setRedactor($app->make(Redactor::class));
         });
 

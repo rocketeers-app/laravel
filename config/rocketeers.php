@@ -53,4 +53,46 @@ return [
     ],
 
     'redact_logs' => env('ROCKETEERS_REDACT_LOGS', true),
+
+    /*
+    |--------------------------------------------------------------------------
+    | API URL
+    |--------------------------------------------------------------------------
+    |
+    | Where reports and agent uploads are sent. Leave empty for the default,
+    | https://api.rocketeersapp.com/v1.
+    |
+    */
+
+    'api_url' => env('ROCKETEERS_API_URL'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Ingest
+    |--------------------------------------------------------------------------
+    |
+    | With `php artisan rocketeers:agent` running, errors are handed to that
+    | local agent in well under a millisecond and uploaded in the background,
+    | and the outgoing requests of Laravel's HTTP client are recorded: method,
+    | host, masked path, status, duration and sizes, never headers, bodies or
+    | query strings. Without a running agent nothing changes: errors are sent
+    | directly and no outgoing requests are recorded.
+    |
+    | `uri` defaults to a unix socket in storage/framework. Set it to a short
+    | `unix:///path.sock`, or to `tcp://host:port` when the agent runs in a
+    | separate container. Both the app and the agent read it.
+    |
+    | `sample_rate` is the share of requests, jobs and commands whose outgoing
+    | requests are recorded, from 0.0 to 1.0.
+    |
+    */
+
+    'ingest' => [
+        'enabled' => env('ROCKETEERS_INGEST', true),
+        'uri' => env('ROCKETEERS_INGEST_URI'),
+        'outgoing_requests' => [
+            'enabled' => env('ROCKETEERS_OUTGOING_REQUESTS', true),
+            'sample_rate' => (float) env('ROCKETEERS_OUTGOING_REQUESTS_SAMPLE_RATE', 1.0),
+        ],
+    ],
 ];

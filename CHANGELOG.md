@@ -2,6 +2,17 @@
 
 All notable changes to `rocketeers-laravel` will be documented in this file
 
+## 2.24.0 - 2026-11-17
+
+- Add the Rocketeers agent, `php artisan rocketeers:agent`: a local daemon without dependencies that takes errors from the app over a unix socket in `storage/framework` (or `ROCKETEERS_INGEST_URI`) and uploads them gzipped in batches to `/v1/ingest`, retrying with backoff when the API is unreachable
+- Hand errors to the agent when it runs, and post them directly as before when it does not or does not accept them; both ways carry the same `report_id`, so an error is stored once
+- Record the outgoing requests of Laravel's HTTP client (Laravel 10.14 or newer) while the agent runs: method, host, masked path, status or connection error, duration and sizes, never headers, bodies or query strings; sampled through `ROCKETEERS_OUTGOING_REQUESTS_SAMPLE_RATE`
+- Add `rocketeers.api_url` (`ROCKETEERS_API_URL`) and `rocketeers.ingest`; no need to publish the config again
+- `rocketeers:test` shows whether the agent runs, which way the test error went and whether outgoing requests are recorded, and gets a `--direct` option
+- Without a running agent nothing changes: errors are posted with exactly the same payload, nothing is recorded and nothing is written
+- Suggest `ext-pcntl`, which lets the agent finish its uploads when it is stopped
+- Require `rocketeers-app/rocketeers-api-client` 2.24
+
 ## 2.23.7 - 2026-11-17
 
 - Skip an exception thrown in a queued job when the exception handler would not report it, so `ShouldntReport` and `dontReport()` / `ignore()` now hold for jobs too instead of only for the log channel

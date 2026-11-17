@@ -55,8 +55,21 @@ return [
     ],
 
     'redact_logs' => env('ROCKETEERS_REDACT_LOGS', true),
+
+    'api_url' => env('ROCKETEERS_API_URL'),
+
+    'ingest' => [
+        'enabled' => env('ROCKETEERS_INGEST', true),
+        'uri' => env('ROCKETEERS_INGEST_URI'),
+        'outgoing_requests' => [
+            'enabled' => env('ROCKETEERS_OUTGOING_REQUESTS', true),
+            'sample_rate' => (float) env('ROCKETEERS_OUTGOING_REQUESTS_SAMPLE_RATE', 1.0),
+        ],
+    ],
 ];
 ```
+
+You don't have to publish the file again after upgrading: new keys get their defaults from the package.
 
 ## Redaction
 
@@ -137,6 +150,102 @@ CSRF token — and answers with an `Access-Control-Allow-Origin` header for the
 dashboard. Point that elsewhere with `ROCKETEERS_HORIZON_ORIGIN`, and change the
 signature lifetime with `ROCKETEERS_HORIZON_TTL` (seconds, default 300).
 
+## Rocketeers agent
+
+Without the agent, every error is posted to Rocketeers while the request or job that hit it waits
+for the answer. With the agent running, the app hands errors to a local daemon in well under a
+millisecond and goes on; the agent uploads them in compressed batches in the background, and
+retries when the API is briefly unreachable. The agent also enables recording the outgoing requests
+your app makes with Laravel's HTTP client.
+
+```bash
+php artisan rocketeers:agent
+```
+
+**Not running the agent changes nothing.** Errors are then posted directly, exactly as before, no
+outgoing requests are recorded, and nothing is written to disk.
+
+### Running it
+
+Run the agent as a daemon next to your queue workers, as the same user as PHP-FPM, one per server.
+On Rocketeers, add it with **Create daemon › Rocketeers Agent**. With supervisor:
+
+```ini
+[program:rocketeers-agent]
+command=php /var/www/example.com/artisan rocketeers:agent
+user=www-data
+autostart=true
+autorestart=true
+stopsignal=TERM
+stopwaitsecs=15
+redirect_stderr=true
+stdout_logfile=/var/www/example.com/storage/logs/rocketeers-agent.log
+```
+
+- On a stop signal the agent removes its socket first, so the app sends errors directly from that
+  moment, then uploads what it still holds for at most `--drain` seconds (default 5) and exits.
+  This needs `ext-pcntl`; without it the agent warns at start and stops at once.
+- `--max-memory=128` makes it stop gracefully above that many MB, for supervisor to restart it.
+- `-v` logs a line of statistics every minute.
+- Without a `ROCKETEERS_API_TOKEN`, with `ROCKETEERS_INGEST=false` or in an environment that is not
+  listed in `rocketeers.environments`, the agent idles instead of exiting, so supervisor keeps it
+  running without error.
+- Only one agent runs per app: a second one waits until the first stops.
+- Restart the agent after deploying and after changing `ROCKETEERS_API_TOKEN`; it refuses records
+  from an app that uses another token than its own.
+
+### Where the app finds it
+
+The agent listens on a unix socket at `storage/framework/rocketeers.sock`, with the storage path
+resolved through symlinks, so every release of a zero-downtime deploy finds the same socket. It is
+created with mode `0660`: only the app's own user and group can write to it, and no port has to be
+allocated per server.
+
+Set `ROCKETEERS_INGEST_URI` for both the app and the agent to use another address:
+
+```dotenv
+# A socket path of more than 100 bytes, which unix sockets do not allow, e.g. a deep path on macOS:
+ROCKETEERS_INGEST_URI=unix:///tmp/example-rocketeers.sock
+
+# The agent in another container:
+ROCKETEERS_INGEST_URI=tcp://rocketeers-agent:7625
+```
+
+In the agent's container, `php artisan rocketeers:agent --listen=tcp://0.0.0.0:7625` overrides the
+address it listens on.
+
+### Outgoing requests
+
+With the agent running, a token set and the environment listed in `rocketeers.environments`,
+each request your app sends through Laravel's HTTP client (`Http::get()` and friends, Laravel 10.14
+or newer) is recorded with:
+
+- the method, scheme, host and port;
+- the path, without its query string, fragment or credentials, and with segments that look like
+  tokens masked: a segment of 16 or more characters mixing letters and digits becomes `*****`, a
+  Telegram-style `bot123:…` segment becomes `bot*****`, and UUIDs are kept;
+- the status, or `timeout`, `dns`, `connect`, `tls` or `other` when no response arrived;
+- the start time and duration, and the sizes of the request and response bodies in bytes;
+- the request, job or command it was made from (route name or uri, job class, command name).
+
+Headers, cookies, query strings and request or response bodies are **never** recorded: bodies are
+not even read, their sizes come from the stream or the `Content-Length` header.
+
+Record only a share of your requests, jobs and commands with a sample rate between 0 and 1, or switch
+the recording off:
+
+```dotenv
+ROCKETEERS_OUTGOING_REQUESTS_SAMPLE_RATE=0.25
+ROCKETEERS_OUTGOING_REQUESTS=false
+```
+
+### When the agent cannot take an error
+
+An error the agent does not accept (it is not running, does not answer within 250 milliseconds, its
+queue is full, or Rocketeers rejected its token) is posted directly instead. Both ways carry the same
+report id, so Rocketeers stores the error once. Outgoing requests the agent does not accept are
+dropped. Set `ROCKETEERS_INGEST=false` to bypass the agent altogether.
+
 ## Testing the integration
 
 To verify that error reporting is wired up correctly, run:
@@ -146,6 +255,8 @@ php artisan rocketeers:test
 ```
 
 This sends a test error to Rocketeers so you can confirm it arrives in your dashboard. The command checks that a `ROCKETEERS_API_TOKEN` is configured, warns when the current environment is not listed in `rocketeers.environments` (real errors would not be reported there), and reports the API error if sending fails.
+
+It also tells whether the Rocketeers agent is running (and which version), whether the test error went through the agent or directly to the API, and whether outgoing requests are being recorded, and if not, why. Use `--direct` to skip a running agent.
 
 ### Changelog
 
