@@ -85,6 +85,9 @@ return [
     | `sample_rate` is the share of requests, jobs and commands whose outgoing
     | requests are recorded, from 0.0 to 1.0.
     |
+    | Opt a call out with `Http::withoutRecording()`, or wrap code with
+    | `RecordOutgoingRequests::withoutRecording(fn () => ...)`.
+    |
     */
 
     'ingest' => [

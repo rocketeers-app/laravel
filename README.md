@@ -231,6 +231,21 @@ or newer) is recorded with:
 Headers, cookies, query strings and request or response bodies are **never** recorded: bodies are
 not even read, their sizes come from the stream or the `Content-Length` header.
 
+Opt a single call out with `Http::withoutRecording()`, which also chains
+(`Http::withHeaders(...)->withoutRecording()->get(...)`) and holds through redirects. For code that
+sends its own requests, such as a third-party package, wrap it instead:
+
+```php
+use Illuminate\Support\Facades\Http;
+use Rocketeers\Laravel\Ingest\RecordOutgoingRequests;
+
+Http::withoutRecording()->get('https://example.com/health');
+
+RecordOutgoingRequests::withoutRecording(fn () => $favicons->fetch($domain));
+```
+
+The macro is always registered, so it is safe to call locally, in tests and with recording switched off.
+
 Record only a share of your requests, jobs and commands with a sample rate between 0 and 1, or switch
 the recording off:
 

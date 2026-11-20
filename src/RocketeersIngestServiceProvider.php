@@ -4,6 +4,7 @@ namespace Rocketeers\Laravel;
 
 use Illuminate\Container\Container;
 use Illuminate\Http\Client\Factory;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\ServiceProvider;
 use Rocketeers\Laravel\Ingest\AgentAwareRocketeers;
 use Rocketeers\Laravel\Ingest\AgentConnection;
@@ -32,6 +33,8 @@ class RocketeersIngestServiceProvider extends ServiceProvider
 
     public function register()
     {
+        static::registerMacros();
+
         $this->app->singleton(AgentEndpoint::class, function () {
             return AgentEndpoint::fromConfig(config('rocketeers.ingest.uri'), storage_path('framework'));
         });
@@ -73,6 +76,17 @@ class RocketeersIngestServiceProvider extends ServiceProvider
         $this->flushWhenExecutionsEnd();
         $this->followExecutions();
         $this->recordOutgoingRequests();
+    }
+
+    public static function registerMacros(): void
+    {
+        if (! class_exists(PendingRequest::class) || ! method_exists(PendingRequest::class, 'macro')) {
+            return;
+        }
+
+        PendingRequest::macro('withoutRecording', function (): PendingRequest {
+            return $this->withOptions([RecordOutgoingRequests::OPTION => false]);
+        });
     }
 
     public static function active(): bool

@@ -2,6 +2,12 @@
 
 All notable changes to `rocketeers-laravel` will be documented in this file
 
+## 2.25.0 - 2026-11-20
+
+- Add `Http::withoutRecording()` to keep a single outgoing request out of the recording; it chains with the other `PendingRequest` methods and holds through redirects
+- Add `RecordOutgoingRequests::withoutRecording(fn () => ...)` to keep every request sent inside the callback out of the recording, for code that builds its own requests; it nests and resumes recording after an exception
+- The macro is registered whether or not ingest is active, so calling it never breaks locally, in tests or with recording switched off
+
 ## 2.24.0 - 2026-11-17
 
 - Add the Rocketeers agent, `php artisan rocketeers:agent`: a local daemon without dependencies that takes errors from the app over a unix socket in `storage/framework` (or `ROCKETEERS_INGEST_URI`) and uploads them gzipped in batches to `/v1/ingest`, retrying with backoff when the API is unreachable

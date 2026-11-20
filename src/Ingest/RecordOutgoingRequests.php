@@ -27,6 +27,10 @@ class RecordOutgoingRequests
         'GuzzleHttp\Exception\ResponseTimeoutException',
     ];
 
+    public const OPTION = 'rocketeers_record';
+
+    protected static int $paused = 0;
+
     /** @var AgentConnection */
     protected $connection;
 
@@ -43,13 +47,29 @@ class RecordOutgoingRequests
         $this->context = $context;
     }
 
+    public static function withoutRecording(callable $callback): mixed
+    {
+        static::$paused++;
+
+        try {
+            return $callback();
+        } finally {
+            static::$paused--;
+        }
+    }
+
+    public static function paused(): bool
+    {
+        return static::$paused > 0;
+    }
+
     /**
      * A handler may also throw instead of rejecting (Laravel's fakes do), which is recorded the same way.
      */
     public function __invoke(callable $handler): callable
     {
         return function (RequestInterface $request, array $options) use ($handler) {
-            if (! $this->context->sampled() || ! $this->connection->present()) {
+            if (static::paused() || ($options[self::OPTION] ?? true) === false || ! $this->context->sampled() || ! $this->connection->present()) {
                 return $handler($request, $options);
             }
 

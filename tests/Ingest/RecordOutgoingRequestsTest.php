@@ -13,15 +13,19 @@ use GuzzleHttp\Psr7\Request as PsrRequest;
 use GuzzleHttp\Psr7\Response as PsrResponse;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Route;
+use Illuminate\Support\Facades\Http;
 use Rocketeers\Laravel\Ingest\AgentConnection;
 use Rocketeers\Laravel\Ingest\AgentEndpoint;
 use Rocketeers\Laravel\Ingest\ExecutionContext;
 use Rocketeers\Laravel\Ingest\RecordBuffer;
 use Rocketeers\Laravel\Ingest\RecordOutgoingRequests;
 use Rocketeers\Laravel\Ingest\Uuid;
+use Rocketeers\Laravel\RocketeersIngestServiceProvider;
 use Rocketeers\Laravel\Tests\Support\TemporaryDirectory;
+use RuntimeException;
 
 class RecordOutgoingRequestsTest extends IngestTestCase
 {
@@ -299,5 +303,96 @@ class RecordOutgoingRequestsTest extends IngestTestCase
         } finally {
             TemporaryDirectory::remove($directory);
         }
+    }
+
+    public function test_a_request_opted_out_with_the_macro_is_not_recorded()
+    {
+        Http::fake();
+
+        Http::withoutRecording()->get('https://probe.example.com/');
+        Http::withHeaders(['Accept' => 'text/html'])->withoutRecording()->get('https://probe.example.com/chained');
+        Http::get('https://api.example.com/recorded');
+
+        $records = $this->buffered();
+
+        $this->assertCount(1, $records);
+        $this->assertSame('api.example.com', $records[0]['host']);
+    }
+
+    public function test_the_opt_out_survives_a_redirect()
+    {
+        Http::fake([
+            'https://old.example.com/*' => Http::response('', 301, ['Location' => 'https://new.example.com/landing']),
+            'https://new.example.com/*' => Http::response('landed'),
+        ]);
+
+        $response = Http::withoutRecording()->get('https://old.example.com/start');
+
+        $this->assertSame('landed', $response->body());
+        $this->assertSame([], $this->buffered());
+
+        Http::get('https://old.example.com/start');
+
+        $this->assertSame(['old.example.com', 'new.example.com'], array_column($this->buffered(), 'host'));
+    }
+
+    public function test_nothing_sent_inside_without_recording_is_recorded()
+    {
+        Http::fake();
+
+        $result = RecordOutgoingRequests::withoutRecording(function () {
+            Http::get('https://probe.example.com/outer');
+
+            RecordOutgoingRequests::withoutRecording(function () {
+                Http::get('https://probe.example.com/inner');
+            });
+
+            $this->assertTrue(RecordOutgoingRequests::paused());
+
+            Http::get('https://probe.example.com/after-inner');
+
+            return 'done';
+        });
+
+        $this->assertSame('done', $result);
+        $this->assertFalse(RecordOutgoingRequests::paused());
+
+        Http::get('https://api.example.com/recorded');
+
+        $this->assertSame(['api.example.com'], array_column($this->buffered(), 'host'));
+    }
+
+    public function test_recording_resumes_after_an_exception_inside_without_recording()
+    {
+        Http::fake();
+
+        try {
+            RecordOutgoingRequests::withoutRecording(function () {
+                throw new RuntimeException('Probe failed');
+            });
+
+            $this->fail('The exception was swallowed.');
+        } catch (RuntimeException $e) {
+            $this->assertSame('Probe failed', $e->getMessage());
+        }
+
+        $this->assertFalse(RecordOutgoingRequests::paused());
+
+        Http::get('https://api.example.com/recorded');
+
+        $this->assertCount(1, $this->buffered());
+    }
+
+    public function test_the_macro_is_available_and_harmless_when_ingest_is_inactive()
+    {
+        $this->bootWith(['rocketeers.api_token' => null]);
+
+        $this->assertFalse(RocketeersIngestServiceProvider::active());
+        $this->assertTrue(PendingRequest::hasMacro('withoutRecording'));
+
+        Http::fake(['*' => Http::response('ok')]);
+
+        $this->assertSame('ok', Http::withoutRecording()->get('https://probe.example.com/')->body());
+        $this->assertSame([], $this->buffered());
     }
 }
