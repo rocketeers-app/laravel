@@ -269,9 +269,9 @@ To verify that error reporting is wired up correctly, run:
 php artisan rocketeers:test
 ```
 
-This sends a test error to Rocketeers so you can confirm it arrives in your dashboard. The command checks that a `ROCKETEERS_API_TOKEN` is configured, warns when the current environment is not listed in `rocketeers.environments` (real errors would not be reported there), and reports the API error if sending fails.
+This posts a test error straight to the Rocketeers API and shows right away whether it arrived: the HTTP status Rocketeers answered with, and when it was rejected, its message and what to check (an unrecognised token, a token that may not report errors, a wrong `ROCKETEERS_API_URL`) or why the API could not be reached. The command exits with 1 when the error did not arrive, so it can run in a deploy script. It also checks that a `ROCKETEERS_API_TOKEN` is configured and warns when the current environment is not listed in `rocketeers.environments` (real errors would not be reported there).
 
-It also tells whether the Rocketeers agent is running (and which version), whether the test error went through the agent or directly to the API, and whether outgoing requests are being recorded, and if not, why. Use `--direct` to skip a running agent.
+It also tells whether the Rocketeers agent is running (and which version) and whether outgoing requests are being recorded, and if not, why. Use `--agent` to hand the test error to a running agent instead; the agent uploads it later, so the command cannot show whether it arrived.
 
 ### Changelog
 

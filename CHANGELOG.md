@@ -2,6 +2,11 @@
 
 All notable changes to `rocketeers-laravel` will be documented in this file
 
+## Unreleased
+
+- `rocketeers:test` now shows right away whether the test error arrived: it posts it straight to the API, prints the HTTP status, and when the error was rejected or the API could not be reached, the reason and what to check; it exits with 1 when the error did not arrive
+- Add `--agent` to `rocketeers:test` to hand the test error to a running agent as before; `--direct` is now the default and still accepted
+
 ## 2.25.0 - 2026-11-20
 
 - Add `Http::withoutRecording()` to keep a single outgoing request out of the recording; it chains with the other `PendingRequest` methods and holds through redirects

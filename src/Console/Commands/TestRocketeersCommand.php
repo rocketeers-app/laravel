@@ -5,6 +5,7 @@ namespace Rocketeers\Laravel\Console\Commands;
 use Exception;
 use Illuminate\Console\Command;
 use Illuminate\Http\Client\Factory;
+use Illuminate\Support\Str;
 use Rocketeers\Laravel\Ingest\AgentAwareRocketeers;
 use Rocketeers\Laravel\Ingest\AgentConnection;
 use Rocketeers\Laravel\Ingest\AgentEndpoint;
@@ -14,9 +15,10 @@ use Rocketeers\Rocketeers;
 class TestRocketeersCommand extends Command
 {
     protected $signature = 'rocketeers:test
-        {--direct : Send the test error straight to the Rocketeers API, even when the agent is running}';
+        {--agent : Hand the test error to a running Rocketeers agent instead, which uploads it later, so whether it arrived cannot be shown}
+        {--direct : Post the test error straight to the Rocketeers API, which is the default}';
 
-    protected $description = 'Send a test error to Rocketeers to verify the error reporting integration.';
+    protected $description = 'Send a test error to Rocketeers and show whether it arrived.';
 
     public function handle(Rocketeers $client): int
     {
@@ -42,16 +44,18 @@ class TestRocketeersCommand extends Command
         }
 
         $agentRunning = $this->reportAgent();
+        $this->reportOutgoingRequests($agentRunning);
 
         $exception = new Exception('Rocketeers test error triggered by rocketeers:test at '.now()->toDateTimeString());
         $bypassed = AgentAwareRocketeers::bypassed();
 
-        if ($this->option('direct')) {
+        // Only a direct post gets an answer from the API; the agent uploads later, out of sight.
+        if (! $this->option('agent')) {
             AgentAwareRocketeers::bypass(true);
         }
 
         try {
-            $client->report([
+            $response = $client->report([
                 'environment' => $environment,
                 'code' => 500,
                 'exception' => get_class($exception),
@@ -69,17 +73,78 @@ class TestRocketeersCommand extends Command
             AgentAwareRocketeers::bypass($bypassed);
         }
 
-        $this->info('Test error sent to Rocketeers. Check your dashboard to confirm it arrived.');
-
         if ($client instanceof AgentAwareRocketeers && $client->lastTransport() === AgentAwareRocketeers::AGENT) {
-            $this->line('Delivered through the Rocketeers agent, which uploads it within seconds.');
-        } else {
-            $this->line(sprintf('Sent directly to %s/errors.', Rocketeers::baseUrl()));
+            $this->info('Test error handed to the Rocketeers agent, which uploads it within seconds.');
+            $this->line('Whether it arrived cannot be shown from here: check your dashboard, or run this command without --agent.');
+
+            return self::SUCCESS;
         }
 
-        $this->reportOutgoingRequests($agentRunning);
+        return $this->reportResponse($client, $response) ? self::SUCCESS : self::FAILURE;
+    }
 
-        return self::SUCCESS;
+    /**
+     * Tells from the API's answer to the direct post whether the test error arrived, and if not, why.
+     */
+    protected function reportResponse(Rocketeers $client, $response): bool
+    {
+        $url = Rocketeers::baseUrl().'/errors';
+        $status = $client->lastStatus();
+
+        if ($status === null) {
+            $this->error(sprintf(
+                'The test error did not arrive: %s could not be reached (%s).',
+                $url,
+                $client->lastError() ?: 'no response'
+            ));
+
+            return false;
+        }
+
+        if ($status >= 200 && $status < 300) {
+            $this->info(sprintf('Rocketeers received the test error (HTTP %d from %s). It is on your dashboard now.', $status, $url));
+
+            return true;
+        }
+
+        $this->error(sprintf('The test error did not arrive: Rocketeers answered HTTP %d from %s.', $status, $url));
+
+        if (($message = $this->messageFrom($response)) !== null) {
+            $this->line('Rocketeers said: '.$message);
+        }
+
+        if (($hint = $this->hintFor($status)) !== null) {
+            $this->line($hint);
+        }
+
+        return false;
+    }
+
+    protected function hintFor(int $status): ?string
+    {
+        return match (true) {
+            $status === 401 => 'The API token is not recognised. Check that ROCKETEERS_API_TOKEN holds the token of this environment in Rocketeers.',
+            $status === 403 => 'The API token may not report errors. Use the token of this environment in Rocketeers, not a personal API token.',
+            $status === 404 => 'Nothing takes errors at this address. Check ROCKETEERS_API_URL, or leave it empty to use the default.',
+            $status === 429 => 'Too many requests. Wait a minute and try again.',
+            $status >= 500 => 'Something went wrong at Rocketeers. Try again in a moment.',
+            default => null,
+        };
+    }
+
+    /**
+     * The API answers in JSON with a "message"; anything else, such as a proxy's HTML page, is left out.
+     */
+    protected function messageFrom($response): ?string
+    {
+        if (! is_string($response) || $response === '') {
+            return null;
+        }
+
+        $decoded = json_decode($response, true);
+        $message = is_array($decoded) ? ($decoded['message'] ?? $decoded['error'] ?? null) : $decoded;
+
+        return is_string($message) && trim($message) !== '' ? Str::limit(trim($message), 300) : null;
     }
 
     protected function reportAgent(): bool
