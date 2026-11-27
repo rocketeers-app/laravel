@@ -2,6 +2,10 @@
 
 All notable changes to `rocketeers-laravel` will be documented in this file
 
+## 2.26.1 - 2026-11-27
+
+- Report an error without a user when looking up the logged-in user fails (database down, or a session id the users table no longer accepts), instead of throwing a new error from the log handler that every handler up the stack logged again while the original error never reached Rocketeers
+
 ## 2.26.0 - 2026-11-24
 
 - `rocketeers:test` now shows right away whether the test error arrived: it posts it straight to the API, prints the HTTP status, and when the error was rejected or the API could not be reached, the reason and what to check; it exits with 1 when the error did not arrive

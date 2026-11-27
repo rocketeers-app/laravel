@@ -83,6 +83,24 @@ class LogChannelTest extends TestCase
         $this->assertIsArray($report['trace']);
     }
 
+    public function test_an_exception_is_still_reported_when_looking_up_the_user_fails()
+    {
+        $auth = Mockery::mock();
+        $auth->shouldReceive('user')->andThrow(new RuntimeException('invalid input syntax for type uuid: "42"'));
+
+        $this->app->instance('auth', $auth);
+
+        $exception = new RuntimeException('boom');
+
+        $report = $this->reportOf('Something failed', ['exception' => $exception]);
+
+        $this->assertNull($report['user_id']);
+        $this->assertNull($report['user_email']);
+        $this->assertSame(RuntimeException::class, $report['exception']);
+        $this->assertSame('boom', $report['message']);
+        $this->assertSame((string) $exception->getLine(), $report['line']);
+    }
+
     protected function reportOf(string $message, array $context): array
     {
         config(['rocketeers.environments' => ['testing']]);

@@ -40,7 +40,7 @@ class RocketeersLoggerHandler extends AbstractProcessingHandler
         }
 
         $request = app('request');
-        $user = app('auth')?->user();
+        $user = $this->getUser();
 
         try {
             $this->client->report([
@@ -166,6 +166,20 @@ class RocketeersLoggerHandler extends AbstractProcessingHandler
         }
 
         return gethostbyaddr($request->getClientIp());
+    }
+
+    /**
+     * Looking up the user can fail for the very reason the error is being logged: the database is down, or a
+     * session holds an id the users table no longer accepts. Letting that escape turned the report into a new
+     * error, logged again by every handler up the stack, and the original error never reached Rocketeers.
+     */
+    public function getUser(): mixed
+    {
+        try {
+            return app('auth')?->user();
+        } catch (Throwable $exception) {
+            return null;
+        }
     }
 
     public function getSession(Request $request): ?array
